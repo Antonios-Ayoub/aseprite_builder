@@ -29,9 +29,10 @@ jobs:
         VERSION_INFO=$(echo "${data}" | jq -r '.body')
         
         echo "${LATEST_TAG}" > ${LATEST_TAG}.txt
-        echo "::set-output name=latest_tag::${LATEST_TAG}"
-        echo "::set-output name=download_url::${DOWNLOAD_URL}"
-        echo "::set-output name=version_info::${VERSION_INFO}"
+        # set step outputs via $GITHUB_OUTPUT (replacement for set-output)
+        echo "latest_tag=${LATEST_TAG}" >> $GITHUB_OUTPUT
+        echo "download_url=${DOWNLOAD_URL}" >> $GITHUB_OUTPUT
+        echo "version_info=${VERSION_INFO}" >> $GITHUB_OUTPUT
     - name: Load version from cache
       id: version_check
       uses: actions/cache@v3
@@ -41,7 +42,8 @@ jobs:
     - name: Should we start new build?
       id: should_build
       if: steps.version_check.outputs.cache-hit != 'true'
-      run: echo "::set-output name=should_build::true"
+      run: |
+        echo "should_build=true" >> $GITHUB_OUTPUT
     - name: Create Release
       id: create_release
       if: steps.should_build.outputs.should_build
@@ -66,9 +68,13 @@ jobs:
          os: [windows-latest]
        fail-fast: false    
     steps:
-      - name: (Windows) Install dependencies
+      - name: (Windows) Install Ninja
         if: matrix.os == 'windows-latest'
-        uses: seanmiddleditch/gha-setup-ninja@v1
+        shell: pwsh
+        run: |
+          choco install -y ninja
+          # Add chocolatey bin to PATH via $GITHUB_PATH (secure replacement for add-path)
+          Add-Content -Path $env:GITHUB_PATH -Value 'C:\ProgramData\chocolatey\bin'
       - name: (Ubuntu) Install dependencies
         if: matrix.os == 'ubuntu-latest'
         run: sudo apt install -y cmake ninja-build libxcursor-dev libxi-dev libgl1-mesa-dev
@@ -133,5 +139,3 @@ jobs:
           asset_path: aseprite/build/bin/Aseprite-${{ needs.check-version.outputs.latest_tag }}-${{ runner.os }}.zip
           asset_name: Aseprite-${{ needs.check-version.outputs.latest_tag }}-${{ runner.os }}.zip
           asset_content_type: application/zip
-
-
